@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>San Diego Farmers Markets</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      line-height: 1.6;
+      margin: 0;
+      padding: 0;
+      background-color: #f9f9f9;
+      color: #333;
+    }
+    header {
+      background: #4CAF50;
+      color: #fff;
+      padding: 1rem 0;
+      text-align: center;
+    }
+    header h1 {
+      margin: 0;
+    }
+    .container {
+      margin: 20px auto;
+      padding: 20px;
+      max-width: 1200px;
+      background: #fff;
+      border-radius: 8px;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    }
+    .search-box, .day-filter {
+      margin-bottom: 20px;
+    }
+    .search-box input, .day-filter select {
+      width: 100%;
+      padding: 10px;
+      font-size: 16px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    table thead {
+      background: #4CAF50;
+      color: white;
+    }
+    table th, table td {
+      padding: 12px;
+      text-align: left;
+      border-bottom: 1px solid #ddd;
+    }
+    table tbody tr:hover {
+      background: #f1f1f1;
+      cursor: pointer;
+    }
+    .map-container {
+      margin-top: 20px;
+      height: 400px;
+      border: 2px solid #ccc;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .nearest-market {
+      margin: 20px 0;
+      padding: 10px;
+      background: #ffeb3b;
+      border-radius: 8px;
+      font-weight: bold;
+      display: none;
+    }
+    #directionsPanel {
+      margin-top: 20px;
+      padding: 10px;
+      background: #f9f9f9;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>San Diego Farmers Markets</h1>
+  </header>
+  <div class="container">
+    <div class="search-box">
+      <input type="text" id="searchInput" placeholder="Search for a market, day, or location...">
+    </div>
+    <div class="day-filter">
+      <select id="dayFilter">
+        <option value="All">All Days</option>
+        <option value="Sunday">Sunday</option>
+        <option value="Monday">Monday</option>
+        <option value="Tuesday">Tuesday</option>
+        <option value="Wednesday">Wednesday</option>
+        <option value="Thursday">Thursday</option>
+        <option value="Friday">Friday</option>
+        <option value="Saturday">Saturday</option>
+      </select>
+    </div>
+    <div class="nearest-market" id="nearestMarket">
+      Finding the nearest market to your location...
+    </div>
+    <table id="marketsTable">
+      <thead>
+        <tr>
+          <th>Market Name</th>
+          <th>Location</th>
+          <th>Day</th>
+          <th>Time</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr data-lat="32.699" data-lng="-117.169" data-day="Tuesday">
+          <td>Coronado Certified Farmers Market</td>
+          <td>Coronado Ferry Landing, 1201 First St, Coronado</td>
+          <td>Tuesday</td>
+          <td>2:30 PM - 6:00 PM</td>
+        </tr>
+        <tr data-lat="32.723" data-lng="-117.167" data-day="Saturday">
+          <td>Little Italy Mercato</td>
+          <td>501 W Date St, San Diego</td>
+          <td>Saturday</td>
+          <td>8:00 AM - 2:00 PM</td>
+        </tr>
+        <tr data-lat="32.752" data-lng="-117.148" data-day="Sunday">
+          <td>Hillcrest Farmers Market</td>
+          <td>3960 Normal St, San Diego</td>
+          <td>Sunday</td>
+          <td>8:00 AM - 2:00 PM</td>
+        </tr>
+        <tr data-lat="32.747" data-lng="-117.251" data-day="Wednesday">
+          <td>Ocean Beach Farmers Market</td>
+          <td>4900 Newport Ave, San Diego</td>
+          <td>Wednesday</td>
+          <td>4:00 PM - 8:00 PM</td>
+        </tr>
+        <!-- Add more rows as needed -->
+      </tbody>
+    </table>
+    <div id="map" class="map-container"></div>
+    <div id="directionsPanel"></div>
+  </div>
+  <script src="https://maps.googleapis.com/maps/api/js?key=YOUR_GOOGLE_MAPS_API_KEY&libraries=geometry,places"></script>
+  <script>
+    const map = new google.maps.Map(document.getElementById('map'), {
+      zoom: 12,
+      center: { lat: 32.7157, lng: -117.1611 }, // Default center: San Diego
+    });
+    const directionsService = new google.maps.DirectionsService();
+    const directionsRenderer = new google.maps.DirectionsRenderer();
+    directionsRenderer.setMap(map);
+    directionsRenderer.setPanel(document.getElementById('directionsPanel'));
+
+    document.getElementById('searchInput').addEventListener('input', function () {
+      const searchValue = this.value.toLowerCase();
+      const rows = document.querySelectorAll('#marketsTable tbody tr');
+      rows.forEach(row => {
+        const rowText = Array.from(row.querySelectorAll('td')).map(td => td.textContent.toLowerCase()).join(' ');
+        row.style.display = rowText.includes(searchValue) ? '' : 'none';
+      });
+    });
+
+    document.getElementById('dayFilter').addEventListener('change', function () {
+      const filterValue = this.value;
+      const rows = document.querySelectorAll('#marketsTable tbody tr');
+      rows.forEach(row => {
+        const rowDay = row.getAttribute('data-day');
+        row.style.display = filterValue === 'All' || rowDay === filterValue ? '' : 'none';
+      });
+    });
+
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const userLat = position.coords.latitude;
+          const userLng = position.coords.longitude;
+          findNearestMarket(userLat, userLng);
+        },
+        () => {
+          document.getElementById('nearestMarket').textContent = 
+            'Unable to access your location. Please enable location services.';
+        }
+      );
+    } else {
+      document.getElementById('nearestMarket').textContent = 
+        'Geolocation is not supported by your browser.';
+    }
+
+    function findNearestMarket(userLat, userLng) {
+      const rows = document.querySelectorAll('#marketsTable tbody tr');
+      let nearestMarket = null;
+      let shortestDistance = Infinity;
+
+      rows.forEach(row => {
+        const marketLat = parseFloat(row.getAttribute('data-lat'));
+        const marketLng = parseFloat(row.getAttribute('data-lng'));
+        const distance = google.maps.geometry.spherical.computeDistanceBetween(
+          new google.maps.LatLng(userLat, userLng),
+          new google.maps.LatLng(marketLat, marketLng)
+        );
+
+        if (distance < shortestDistance) {
+          shortestDistance = distance;
+          nearestMarket = row;
+        }
+      });
+
+      if (nearestMarket) {
+        const marketName = nearestMarket.querySelector('td:first-child').textContent;
+        const marketLocation = nearestMarket.querySelector('td:nth-child(2)').textContent;
+
+        document.getElementById('nearestMarket').innerHTML = 
+          `Nearest Market: <strong>${marketName}</strong> at ${marketLocation}`;
+        document.getElementById('nearestMarket').style.display = 'block';
+
+        const marketLat = parseFloat(nearestMarket.getAttribute('data-lat'));
+        const marketLng = parseFloat(nearestMarket.getAttribute('data-lng'));
+
+        calculateAndDisplayRoute(userLat, userLng, marketLat, marketLng);
+      }
+    }
+
+    function calculateAndDisplayRoute(userLat, userLng, marketLat, marketLng) {
+      const request = {
+        origin: { lat: userLat, lng: userLng },
+        destination: { lat: marketLat, lng: marketLng },
+        travelMode: 'DRIVING',
+      };
+      directionsService.route(request, (result, status) => {
+        if (status === 'OK') {
+          directionsRenderer.setDirections(result);
+        } else {
+          document.getElementById('directionsPanel').textContent = 
+            'Unable to calculate directions. Please try again.';
+        }
+      });
+    }
+  </script>
+</body>
+</html>
