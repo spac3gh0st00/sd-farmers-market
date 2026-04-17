@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SD Farmers Markets — eats.spac3gh0st.lol</title>
+  <title>SD Farmers Markets — markets.spac3gh0st.lol</title>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="apple-touch-icon" href="favicon.svg">
   <meta name="theme-color" content="#c2673e">
@@ -371,6 +371,83 @@
     .popup-info { font-size: .84rem; color: var(--text-muted); line-height: 1.6; }
     .popup-open { color: #3a8a52; font-weight: 600; font-size: .82rem; }
 
+    /* ── NEARBY SECTION ── */
+    .nearby-section {
+      display: none;
+    }
+    .nearby-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 1rem;
+      flex-wrap: wrap;
+      gap: .5rem;
+    }
+    .nearby-radius {
+      font-size: .8rem;
+      color: var(--text-muted);
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 2rem;
+      padding: .3rem .8rem;
+    }
+    .nearby-loading {
+      display: flex;
+      align-items: center;
+      gap: .8rem;
+      padding: 1.4rem;
+      background: var(--card-bg);
+      border: 1px dashed var(--sage-light);
+      border-radius: 16px;
+      color: var(--text-muted);
+      font-size: .9rem;
+    }
+    .spinner {
+      width: 20px; height: 20px;
+      border: 2.5px solid var(--sage-light);
+      border-top-color: var(--sage);
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+      flex-shrink: 0;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .nearby-empty {
+      padding: 1.4rem;
+      background: var(--card-bg);
+      border: 1px dashed var(--border);
+      border-radius: 16px;
+      color: var(--text-muted);
+      font-size: .88rem;
+      text-align: center;
+    }
+
+    .market-card.nearby-card {
+      border-color: #c8deca;
+      background: #f6faf6;
+    }
+    .market-card.nearby-card::before {
+      background: linear-gradient(90deg, var(--sage), var(--sage-light));
+    }
+    .market-card.nearby-card:hover {
+      border-color: var(--sage);
+    }
+    .nearby-source-badge {
+      font-size: .68rem;
+      font-weight: 600;
+      padding: .2rem .6rem;
+      border-radius: 2rem;
+      background: #e4f0e5;
+      color: var(--sage);
+      border: 1px solid #c8deca;
+      white-space: nowrap;
+    }
+    .divider {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: .5rem 0;
+    }
+
     /* ── NO RESULTS ── */
     .no-results {
       grid-column: 1/-1;
@@ -448,6 +525,22 @@
       <div class="stat-chip"><span class="open-dot"></span>&nbsp;<strong id="openCount">0</strong>&nbsp;open now</div>
       <div class="stat-chip">📅 <strong id="todayLabel">—</strong></div>
     </div>
+
+    <!-- NEARBY MARKETS (dynamic via Overpass) -->
+    <div class="nearby-section" id="nearbySection">
+      <div class="nearby-header">
+        <div class="section-title" style="margin:0">📡 Markets Near You</div>
+        <span class="nearby-radius" id="nearbyRadius">Searching within 25 miles…</span>
+      </div>
+      <div id="nearbyContent">
+        <div class="nearby-loading">
+          <div class="spinner"></div>
+          Searching OpenStreetMap for markets near your location…
+        </div>
+      </div>
+    </div>
+
+    <hr class="divider" id="nearbyDivider" style="display:none">
 
     <!-- CARDS GRID -->
     <div class="cards-grid" id="cardsGrid">
@@ -658,7 +751,7 @@
           })
         }).addTo(map).bindPopup('You are here 📍').openPopup();
 
-        // Find nearest
+        // Find nearest curated market
         let minDist = Infinity, nearest = null, nearestIdx = 0;
         MARKETS.forEach((m, i) => {
           const d = Math.hypot(m.lat - userLat, m.lng - userLng);
@@ -669,9 +762,198 @@
           `Nearest market to you: <strong>${nearest.name}</strong> — ${nearest.day}, ${nearest.time}`;
         banner.querySelector('.nearest-inner').style.cursor = 'pointer';
         banner.querySelector('.nearest-inner').addEventListener('click', () => flyToMarker(nearestIdx));
+
+        // Fetch nearby from Overpass
+        fetchNearbyMarkets(userLat, userLng);
+
       }, () => {
         banner.style.display = 'none';
       });
+    }
+
+    // ── CONFIG ───────────────────────────────────────────────────────────
+    // USDA key lives in the Cloudflare Worker — not here. Just set the
+    // worker URL once it's deployed (see worker.js).
+    const USDA_WORKER_URL = 'https://usda-proxy.spac3gh0st-a.workers.dev';
+    // ────────────────────────────────────────────────────────────────────
+
+    // ── NEARBY: runs both sources in parallel ──
+    async function fetchNearbyMarkets(lat, lng) {
+      const section   = document.getElementById('nearbySection');
+      const content   = document.getElementById('nearbyContent');
+      const divider   = document.getElementById('nearbyDivider');
+      const radiusTag = document.getElementById('nearbyRadius');
+
+      section.style.display = 'block';
+      divider.style.display = 'block';
+
+      // Fire both requests simultaneously — if one fails the other still shows
+      const [osmResult, usdaResult] = await Promise.allSettled([
+        fetchOSM(lat, lng),
+        fetchUSDA(lat, lng),
+      ]);
+
+      const osmItems  = osmResult.status  === 'fulfilled' ? osmResult.value  : [];
+      const usdaItems = usdaResult.status === 'fulfilled' ? usdaResult.value : [];
+
+      // Merge + deduplicate across sources by normalised name
+      const seen = new Set();
+      const allItems = [];
+      [...usdaItems, ...osmItems].forEach(item => {
+        const key = item.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+        if (!seen.has(key)) { seen.add(key); allItems.push(item); }
+      });
+
+      // Source summary label
+      const sourceLabels = [];
+      if (usdaItems.length) sourceLabels.push(`${usdaItems.length} USDA`);
+      if (osmItems.length)  sourceLabels.push(`${osmItems.length} OSM`);
+      if (!USDA_WORKER_URL || USDA_WORKER_URL.includes('YOUR_SUBDOMAIN')) sourceLabels.push('add worker URL for USDA');
+      radiusTag.textContent = allItems.length
+        ? `${allItems.length} found · ${sourceLabels.join(' · ')}`
+        : 'No results nearby';
+
+      if (allItems.length === 0) {
+        content.innerHTML = `<div class="nearby-empty">🌾 No additional markets found nearby.<br>
+          <small style="opacity:.65">OSM coverage varies by area · ${USDA_WORKER_URL.includes('YOUR_SUBDOMAIN') ? 'Deploy the Cloudflare Worker to enable USDA results' : 'USDA returned no results here'}</small>
+        </div>`;
+        return;
+      }
+
+      const grid = document.createElement('div');
+      grid.className = 'cards-grid';
+      allItems.forEach(item => renderNearbyCard(item, grid));
+      content.innerHTML = '';
+      content.appendChild(grid);
+    }
+
+    // ── OSM FETCH ──
+    async function fetchOSM(lat, lng) {
+      const RADIUS_M = 40000;
+      const query = `
+        [out:json][timeout:20];
+        (
+          node["amenity"="marketplace"](around:${RADIUS_M},${lat},${lng});
+          node["shop"="farm"](around:${RADIUS_M},${lat},${lng});
+          node["amenity"="farmers_market"](around:${RADIUS_M},${lat},${lng});
+          way["amenity"="marketplace"](around:${RADIUS_M},${lat},${lng});
+          way["shop"="farm"](around:${RADIUS_M},${lat},${lng});
+        );
+        out center tags;
+      `;
+      const res  = await fetch(`https://overpass-api.de/api/interpreter?data=${encodeURIComponent(query)}`);
+      const data = await res.json();
+      const seen = new Set();
+      return (data.elements || [])
+        .filter(el => {
+          const name = el.tags?.name;
+          if (!name || seen.has(name.toLowerCase())) return false;
+          seen.add(name.toLowerCase()); return true;
+        })
+        .map(el => {
+          const t = el.tags || {};
+          const street = t['addr:street'] ? `${t['addr:housenumber'] || ''} ${t['addr:street']}`.trim() : '';
+          const city   = t['addr:city'] || '';
+          return {
+            name:     t.name,
+            location: [street, city].filter(Boolean).join(', ') || 'See map',
+            hours:    t.opening_hours || '',
+            website:  t.website || t['contact:website'] || '',
+            lat:      el.lat ?? el.center?.lat,
+            lng:      el.lon ?? el.center?.lon,
+            source:   'osm',
+          };
+        });
+    }
+
+    // ── USDA FETCH (via Cloudflare Worker proxy) ──
+    async function fetchUSDA(lat, lng) {
+      if (!USDA_WORKER_URL || USDA_WORKER_URL.includes('YOUR_SUBDOMAIN')) return [];
+      const url  = `${USDA_WORKER_URL}?x=${lng}&y=${lat}&radius=25`;
+      const res  = await fetch(url);
+      const data = await res.json();
+      return (Array.isArray(data) ? data : []).map(m => ({
+        name:     m.listing_name || 'Unnamed Market',
+        location: [m.location_address, m.location_city, m.location_state].filter(Boolean).join(', '),
+        hours:    m.schedule || '',
+        website:  m.media_website || '',
+        lat:      parseFloat(m.location_y) || null,
+        lng:      parseFloat(m.location_x) || null,
+        phone:    m.contact_phone || '',
+        source:   'usda',
+      }));
+    }
+
+    // ── RENDER A NEARBY CARD + MAP PIN ──
+    function renderNearbyCard(item, grid) {
+      const isUSDA     = item.source === 'usda';
+      const pinColor   = isUSDA ? '#d4a853' : '#6b8f71';
+      const emoji      = isUSDA ? '🌽' : '🌿';
+      const badgeLabel = isUSDA ? 'USDA' : 'OSM';
+      const badgeStyle = isUSDA
+        ? 'background:#fef5e0;color:#a07820;border-color:#f0cc7a'
+        : 'background:#e4f0e5;color:#4a7a52;border-color:#c8deca';
+
+      if (item.lat && item.lng) {
+        L.marker([item.lat, item.lng], {
+          icon: L.divIcon({
+            className: '',
+            html: `<div style="
+              width:32px;height:32px;border-radius:50% 50% 50% 4px;
+              background:${pinColor};border:2px solid #fff;
+              box-shadow:0 2px 8px rgba(0,0,0,.2);
+              display:flex;align-items:center;justify-content:center;
+              font-size:13px;transform:rotate(-45deg)
+            "><span style="transform:rotate(45deg)">${emoji}</span></div>`,
+            iconSize: [32,32], iconAnchor: [16,32], popupAnchor: [0,-34]
+          })
+        }).addTo(map).bindPopup(`
+          <div class="popup-name">${item.name}</div>
+          <div class="popup-info">
+            📍 ${item.location}<br>
+            ${item.hours   ? `🕐 ${item.hours}<br>`   : ''}
+            ${item.phone   ? `📞 ${item.phone}<br>`   : ''}
+            ${item.website ? `🔗 <a href="${item.website.startsWith('http') ? item.website : 'https://'+item.website}" target="_blank" rel="noopener">Website</a><br>` : ''}
+            <span style="font-size:.72rem;color:${pinColor}">Source: ${isUSDA ? 'USDA Directory' : 'OpenStreetMap'}</span>
+          </div>
+        `);
+      }
+
+      const card = document.createElement('div');
+      card.className = 'market-card nearby-card';
+      card.innerHTML = `
+        <div class="card-header">
+          <span class="card-emoji">${emoji}</span>
+          <span class="nearby-source-badge" style="${badgeStyle}">${badgeLabel}</span>
+        </div>
+        <div class="card-name">${item.name}</div>
+        <div class="card-location">
+          <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/><circle cx="12" cy="9" r="2.5"/></svg>
+          ${item.location || 'See map for location'}
+        </div>
+        <div class="card-footer">
+          ${item.hours
+            ? `<span class="card-time" style="font-size:.77rem">
+                <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+                ${item.hours.length > 50 ? item.hours.slice(0,50)+'…' : item.hours}
+               </span>`
+            : `<span style="font-size:.78rem;color:var(--text-muted)">Hours not listed</span>`
+          }
+          ${item.website
+            ? `<a href="${item.website.startsWith('http') ? item.website : 'https://'+item.website}"
+                  target="_blank" rel="noopener"
+                  style="font-size:.78rem;color:var(--sage);text-decoration:none">Visit →</a>`
+            : ''}
+        </div>
+      `;
+      if (item.lat && item.lng) {
+        card.style.cursor = 'pointer';
+        card.addEventListener('click', () => {
+          map.flyTo([item.lat, item.lng], 15, { duration: 1 });
+          document.getElementById('map').scrollIntoView({ behavior: 'smooth', block: 'center' });
+        });
+      }
+      grid.appendChild(card);
     }
   </script>
 </body>
