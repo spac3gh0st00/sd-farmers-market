@@ -2,7 +2,8 @@
 
 > **A beautiful, community-first guide to every farmers market in San Diego County.**
 
-🔗 **[Live Site → spac3gh0st00.github.io/sd-farmers-market](https://spac3gh0st00.github.io/sd-farmers-market/)**
+🔗 **Live Site →[Fresh From the Farm
+to Your Table](https://spac3gh0st00.github.io/sd-farmers-market/)**
 
 ---
 
