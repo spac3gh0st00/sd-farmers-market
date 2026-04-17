@@ -524,23 +524,11 @@
       <div class="stat-chip"><strong id="visibleCount">20</strong>&nbsp;markets</div>
       <div class="stat-chip"><span class="open-dot"></span>&nbsp;<strong id="openCount">0</strong>&nbsp;open now</div>
       <div class="stat-chip">📅 <strong id="todayLabel">—</strong></div>
-    </div>
-
-    <!-- NEARBY MARKETS (dynamic via Overpass) -->
-    <div class="nearby-section" id="nearbySection">
-      <div class="nearby-header">
-        <div class="section-title" style="margin:0">📡 Markets Near You</div>
-        <span class="nearby-radius" id="nearbyRadius">Searching within 25 miles…</span>
-      </div>
-      <div id="nearbyContent">
-        <div class="nearby-loading">
-          <div class="spinner"></div>
-          Searching OpenStreetMap for markets near your location…
-        </div>
+      <div class="stat-chip" id="nearbyChip" style="display:none">
+        <div class="spinner" style="width:12px;height:12px;border-width:2px;margin-right:.3rem"></div>
+        <span id="nearbyChipText">Searching nearby…</span>
       </div>
     </div>
-
-    <hr class="divider" id="nearbyDivider" style="display:none">
 
     <!-- CARDS GRID -->
     <div class="cards-grid" id="cardsGrid">
@@ -644,9 +632,9 @@
 
     // ── COUNTS ──
     function updateCounts() {
-      const visible = cardEls.filter(c => !c.classList.contains('hidden')).length;
-      const openNow = MARKETS.filter((m, i) => isOpen(m) && !cardEls[i].classList.contains('hidden')).length;
-      document.getElementById('visibleCount').textContent = visible;
+      const allCards = document.querySelectorAll('#cardsGrid .market-card:not(.hidden)');
+      const openNow  = MARKETS.filter((m, i) => isOpen(m) && !cardEls[i].classList.contains('hidden')).length;
+      document.getElementById('visibleCount').textContent = allCards.length;
       document.getElementById('openCount').textContent = openNow;
     }
     updateCounts();
@@ -779,15 +767,13 @@
 
     // ── NEARBY: runs both sources in parallel ──
     async function fetchNearbyMarkets(lat, lng) {
-      const section   = document.getElementById('nearbySection');
-      const content   = document.getElementById('nearbyContent');
-      const divider   = document.getElementById('nearbyDivider');
-      const radiusTag = document.getElementById('nearbyRadius');
+      const chip     = document.getElementById('nearbyChip');
+      const chipText = document.getElementById('nearbyChipText');
+      const mainGrid = document.getElementById('cardsGrid');
+      const noResults = document.getElementById('noResults');
 
-      section.style.display = 'block';
-      divider.style.display = 'block';
+      chip.style.display = 'flex';
 
-      // Fire both requests simultaneously — if one fails the other still shows
       const [osmResult, usdaResult] = await Promise.allSettled([
         fetchOSM(lat, lng),
         fetchUSDA(lat, lng),
@@ -804,27 +790,24 @@
         if (!seen.has(key)) { seen.add(key); allItems.push(item); }
       });
 
-      // Source summary label
-      const sourceLabels = [];
-      if (usdaItems.length) sourceLabels.push(`${usdaItems.length} USDA`);
-      if (osmItems.length)  sourceLabels.push(`${osmItems.length} OSM`);
-      if (!USDA_WORKER_URL || USDA_WORKER_URL.includes('YOUR_SUBDOMAIN')) sourceLabels.push('add worker URL for USDA');
-      radiusTag.textContent = allItems.length
-        ? `${allItems.length} found · ${sourceLabels.join(' · ')}`
-        : 'No results nearby';
+      // Update the stats chip
+      const spinner = chip.querySelector('.spinner');
+      if (spinner) spinner.remove();
 
       if (allItems.length === 0) {
-        content.innerHTML = `<div class="nearby-empty">🌾 No additional markets found nearby.<br>
-          <small style="opacity:.65">OSM coverage varies by area · ${USDA_WORKER_URL.includes('YOUR_SUBDOMAIN') ? 'Deploy the Cloudflare Worker to enable USDA results' : 'USDA returned no results here'}</small>
-        </div>`;
-        return;
+        chip.style.display = 'none';
+      } else {
+        const sourceLabels = [];
+        if (usdaItems.length) sourceLabels.push(`${usdaItems.length} USDA`);
+        if (osmItems.length)  sourceLabels.push(`${osmItems.length} OSM`);
+        chipText.textContent = `📡 ${allItems.length} nearby (${sourceLabels.join(' · ')})`;
       }
 
-      const grid = document.createElement('div');
-      grid.className = 'cards-grid';
-      allItems.forEach(item => renderNearbyCard(item, grid));
-      content.innerHTML = '';
-      content.appendChild(grid);
+      // Append cards into the main grid (before the no-results placeholder)
+      allItems.forEach(item => renderNearbyCard(item, mainGrid, noResults));
+
+      // Recount including new cards
+      updateCounts();
     }
 
     // ── OSM FETCH ──
@@ -885,7 +868,7 @@
     }
 
     // ── RENDER A NEARBY CARD + MAP PIN ──
-    function renderNearbyCard(item, grid) {
+    function renderNearbyCard(item, grid, noResults) {
       const isUSDA     = item.source === 'usda';
       const pinColor   = isUSDA ? '#d4a853' : '#6b8f71';
       const emoji      = isUSDA ? '🌽' : '🌿';
@@ -953,7 +936,7 @@
           document.getElementById('map').scrollIntoView({ behavior: 'smooth', block: 'center' });
         });
       }
-      grid.appendChild(card);
+      grid.insertBefore(card, noResults || null);
     }
   </script>
 </body>
