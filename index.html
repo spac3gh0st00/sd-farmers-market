@@ -4,241 +4,669 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>San Diego Farmers Markets</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      line-height: 1.6;
-      margin: 0;
-      padding: 0;
-      background-color: #f9f9f9;
-      color: #333;
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --cream:     #faf6ef;
+      --warm-white:#fff9f2;
+      --terracotta:#c2673e;
+      --terra-light:#e8916b;
+      --terra-dark: #9b4e2c;
+      --sage:      #6b8f71;
+      --sage-light:#a8c5ad;
+      --brown:     #4a3728;
+      --brown-mid: #7a5c45;
+      --gold:      #d4a853;
+      --gold-light:#f0cc7a;
+      --text:      #2d2118;
+      --text-muted:#8a6f5c;
+      --border:    #e8d9c8;
+      --card-bg:   #fffcf7;
     }
-    header {
-      background: #4CAF50;
-      color: #fff;
-      padding: 1rem 0;
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: var(--cream);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    /* ── HERO ── */
+    .hero {
+      background: var(--brown);
+      position: relative;
+      overflow: hidden;
+      padding: 3.5rem 2rem 3rem;
       text-align: center;
     }
-    header h1 {
-      margin: 0;
+    .hero::before {
+      content: '';
+      position: absolute; inset: 0;
+      background:
+        radial-gradient(ellipse 80% 60% at 20% 50%, rgba(194,103,62,.35) 0%, transparent 60%),
+        radial-gradient(ellipse 60% 80% at 80% 30%, rgba(107,143,113,.25) 0%, transparent 60%);
+      pointer-events: none;
     }
-    .container {
-      margin: 20px auto;
-      padding: 20px;
-      max-width: 1200px;
-      background: #fff;
-      border-radius: 8px;
-      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    .hero-badge {
+      display: inline-block;
+      background: var(--gold);
+      color: var(--brown);
+      font-size: .75rem;
+      font-weight: 500;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      padding: .35rem 1rem;
+      border-radius: 2rem;
+      margin-bottom: 1.2rem;
     }
-    .search-box, .day-filter {
-      margin-bottom: 20px;
+    .hero h1 {
+      font-family: 'Playfair Display', Georgia, serif;
+      font-size: clamp(2.2rem, 6vw, 4rem);
+      color: var(--cream);
+      line-height: 1.1;
+      margin-bottom: .6rem;
     }
-    .search-box input, .day-filter select {
+    .hero h1 em {
+      font-style: italic;
+      color: var(--terra-light);
+    }
+    .hero p {
+      color: var(--sage-light);
+      font-size: 1rem;
+      font-weight: 300;
+      max-width: 480px;
+      margin: 0 auto 1.8rem;
+    }
+    .hero-icons {
+      font-size: 1.5rem;
+      opacity: .7;
+      letter-spacing: .4rem;
+    }
+
+    /* ── CONTROLS ── */
+    .controls {
+      background: var(--warm-white);
+      border-bottom: 1px solid var(--border);
+      padding: 1.2rem 1.5rem;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      box-shadow: 0 2px 12px rgba(74,55,40,.08);
+    }
+    .controls-inner {
+      max-width: 1100px;
+      margin: 0 auto;
+      display: flex;
+      gap: 1rem;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .search-wrap {
+      position: relative;
+      flex: 1;
+      min-width: 200px;
+    }
+    .search-wrap svg {
+      position: absolute;
+      left: .85rem;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--text-muted);
+      pointer-events: none;
+    }
+    .search-wrap input {
       width: 100%;
-      padding: 10px;
-      font-size: 16px;
-      border: 1px solid #ccc;
-      border-radius: 4px;
+      padding: .65rem .9rem .65rem 2.6rem;
+      border: 1.5px solid var(--border);
+      border-radius: 2rem;
+      font-family: 'DM Sans', sans-serif;
+      font-size: .93rem;
+      background: var(--cream);
+      color: var(--text);
+      outline: none;
+      transition: border-color .2s;
     }
-    table {
-      width: 100%;
-      border-collapse: collapse;
+    .search-wrap input:focus { border-color: var(--terracotta); }
+
+    .day-pills {
+      display: flex;
+      gap: .4rem;
+      flex-wrap: wrap;
     }
-    table thead {
-      background: #4CAF50;
-      color: white;
-    }
-    table th, table td {
-      padding: 12px;
-      text-align: left;
-      border-bottom: 1px solid #ddd;
-    }
-    table tbody tr:hover {
-      background: #f1f1f1;
+    .pill {
+      padding: .45rem .85rem;
+      border-radius: 2rem;
+      border: 1.5px solid var(--border);
+      background: transparent;
+      font-family: 'DM Sans', sans-serif;
+      font-size: .82rem;
+      font-weight: 500;
+      color: var(--text-muted);
       cursor: pointer;
+      transition: all .18s;
+      white-space: nowrap;
     }
-    .map-container {
-      margin-top: 20px;
-      height: 400px;
-      border: 2px solid #ccc;
-      border-radius: 8px;
-      overflow: hidden;
+    .pill:hover { border-color: var(--terracotta); color: var(--terracotta); }
+    .pill.active {
+      background: var(--terracotta);
+      border-color: var(--terracotta);
+      color: #fff;
     }
-    .nearest-market {
-      margin: 20px 0;
-      padding: 10px;
-      background: #ffeb3b;
-      border-radius: 8px;
-      font-weight: bold;
+    .pill.today-pill {
+      border-color: var(--gold);
+      color: var(--brown-mid);
+    }
+    .pill.today-pill.active {
+      background: var(--gold);
+      border-color: var(--gold);
+      color: var(--brown);
+    }
+
+    /* ── NEAREST BANNER ── */
+    .nearest-banner {
+      max-width: 1100px;
+      margin: 1.5rem auto .5rem;
+      padding: 0 1.5rem;
       display: none;
     }
-    #directionsPanel {
-      margin-top: 20px;
-      padding: 10px;
-      background: #f9f9f9;
-      border: 1px solid #ccc;
-      border-radius: 8px;
-      max-height: 200px;
-      overflow-y: auto;
+    .nearest-inner {
+      background: linear-gradient(135deg, var(--terracotta), var(--terra-dark));
+      color: #fff;
+      border-radius: 12px;
+      padding: 1rem 1.4rem;
+      display: flex;
+      align-items: center;
+      gap: .9rem;
+      font-size: .92rem;
+    }
+    .nearest-inner span.icon { font-size: 1.5rem; }
+    .nearest-inner strong { font-weight: 600; }
+
+    /* ── MAIN LAYOUT ── */
+    .main-wrap {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 1.5rem 1.5rem 4rem;
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 2rem;
+    }
+
+    /* ── STATS BAR ── */
+    .stats-bar {
+      display: flex;
+      gap: 1.2rem;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .stat-chip {
+      display: flex;
+      align-items: center;
+      gap: .4rem;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 2rem;
+      padding: .4rem .9rem;
+      font-size: .82rem;
+      color: var(--text-muted);
+    }
+    .stat-chip strong { color: var(--text); }
+    .open-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: #5aaa72;
+      display: inline-block;
+      box-shadow: 0 0 0 3px rgba(90,170,114,.2);
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0%,100% { box-shadow: 0 0 0 3px rgba(90,170,114,.2); }
+      50%      { box-shadow: 0 0 0 6px rgba(90,170,114,.05); }
+    }
+
+    /* ── CARDS ── */
+    .cards-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 1.2rem;
+    }
+    .market-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 1.3rem;
+      cursor: pointer;
+      transition: transform .18s, box-shadow .18s, border-color .18s;
+      position: relative;
+      overflow: hidden;
+    }
+    .market-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, var(--terracotta), var(--gold));
+      opacity: 0;
+      transition: opacity .18s;
+    }
+    .market-card:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 8px 28px rgba(74,55,40,.12);
+      border-color: var(--terra-light);
+    }
+    .market-card:hover::before { opacity: 1; }
+    .market-card.is-open { border-color: #b8e0c0; }
+    .market-card.is-open::before { opacity: 1; background: linear-gradient(90deg, #5aaa72, #a8c5ad); }
+    .market-card.hidden { display: none; }
+
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: .75rem;
+      gap: .5rem;
+    }
+    .card-emoji { font-size: 1.7rem; line-height: 1; }
+    .open-badge {
+      font-size: .72rem;
+      font-weight: 600;
+      padding: .25rem .65rem;
+      border-radius: 2rem;
+      background: #e8f5eb;
+      color: #3a8a52;
+      border: 1px solid #b8e0c0;
+      white-space: nowrap;
+    }
+    .closed-badge {
+      font-size: .72rem;
+      font-weight: 500;
+      padding: .25rem .65rem;
+      border-radius: 2rem;
+      background: #f5f0eb;
+      color: var(--text-muted);
+      border: 1px solid var(--border);
+      white-space: nowrap;
+    }
+    .card-name {
+      font-family: 'Playfair Display', Georgia, serif;
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: .3rem;
+      line-height: 1.3;
+    }
+    .card-location {
+      font-size: .83rem;
+      color: var(--text-muted);
+      margin-bottom: .75rem;
+      display: flex;
+      align-items: flex-start;
+      gap: .3rem;
+    }
+    .card-location svg { flex-shrink: 0; margin-top: 2px; }
+    .card-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: .5rem;
+      padding-top: .75rem;
+      border-top: 1px solid var(--border);
+      flex-wrap: wrap;
+    }
+    .card-day {
+      font-size: .8rem;
+      font-weight: 500;
+      color: var(--terracotta);
+      background: #fdf0ea;
+      padding: .25rem .7rem;
+      border-radius: 2rem;
+    }
+    .card-time {
+      font-size: .82rem;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: .3rem;
+    }
+
+    /* ── MAP ── */
+    .map-section { }
+    .section-title {
+      font-family: 'Playfair Display', Georgia, serif;
+      font-size: 1.4rem;
+      color: var(--text);
+      margin-bottom: 1rem;
+      display: flex;
+      align-items: center;
+      gap: .5rem;
+    }
+    #map {
+      height: 420px;
+      border-radius: 16px;
+      border: 1px solid var(--border);
+      overflow: hidden;
+      box-shadow: 0 4px 20px rgba(74,55,40,.1);
+    }
+    .leaflet-popup-content-wrapper {
+      border-radius: 12px !important;
+      font-family: 'DM Sans', sans-serif !important;
+    }
+    .popup-name {
+      font-family: 'Playfair Display', serif;
+      font-size: 1rem;
+      font-weight: 700;
+      color: var(--brown);
+      margin-bottom: .3rem;
+    }
+    .popup-info { font-size: .84rem; color: var(--text-muted); line-height: 1.6; }
+    .popup-open { color: #3a8a52; font-weight: 600; font-size: .82rem; }
+
+    /* ── NO RESULTS ── */
+    .no-results {
+      grid-column: 1/-1;
+      text-align: center;
+      padding: 3rem 1rem;
+      color: var(--text-muted);
+      display: none;
+    }
+    .no-results p { font-size: 1.1rem; margin-top: .5rem; }
+
+    /* ── FOOTER ── */
+    footer {
+      text-align: center;
+      padding: 2rem 1rem;
+      border-top: 1px solid var(--border);
+      color: var(--text-muted);
+      font-size: .82rem;
+      background: var(--warm-white);
+    }
+    footer a { color: var(--terracotta); text-decoration: none; }
+
+    @media (max-width: 600px) {
+      .hero { padding: 2.5rem 1.2rem 2rem; }
+      .controls-inner { gap: .7rem; }
+      .day-pills { gap: .3rem; }
+      .pill { font-size: .76rem; padding: .4rem .7rem; }
     }
   </style>
 </head>
 <body>
-  <header>
-    <h1>San Diego Farmers Markets</h1>
+
+  <!-- HERO -->
+  <header class="hero">
+    <div class="hero-badge">🌿 San Diego, California</div>
+    <h1>Fresh From the <em>Farm</em><br>to Your Table</h1>
+    <p>Discover local farmers markets across San Diego County — from Coronado to Encinitas.</p>
+    <div class="hero-icons">🍅 🥕 🌽 🍓 🌿 🧄 🫐</div>
   </header>
-  <div class="container">
-    <div class="search-box">
-      <input type="text" id="searchInput" placeholder="Search for a market, day, or location...">
+
+  <!-- STICKY CONTROLS -->
+  <div class="controls">
+    <div class="controls-inner">
+      <div class="search-wrap">
+        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        <input type="text" id="searchInput" placeholder="Search markets or neighborhoods…">
+      </div>
+      <div class="day-pills" id="dayPills">
+        <button class="pill active" data-day="All">All Days</button>
+        <button class="pill today-pill" data-day="Today" id="todayPill">Today</button>
+        <button class="pill" data-day="Sunday">Sun</button>
+        <button class="pill" data-day="Monday">Mon</button>
+        <button class="pill" data-day="Tuesday">Tue</button>
+        <button class="pill" data-day="Wednesday">Wed</button>
+        <button class="pill" data-day="Thursday">Thu</button>
+        <button class="pill" data-day="Friday">Fri</button>
+        <button class="pill" data-day="Saturday">Sat</button>
+      </div>
     </div>
-    <div class="day-filter">
-      <select id="dayFilter">
-        <option value="All">All Days</option>
-        <option value="Sunday">Sunday</option>
-        <option value="Monday">Monday</option>
-        <option value="Tuesday">Tuesday</option>
-        <option value="Wednesday">Wednesday</option>
-        <option value="Thursday">Thursday</option>
-        <option value="Friday">Friday</option>
-        <option value="Saturday">Saturday</option>
-      </select>
-    </div>
-    <div class="nearest-market" id="nearestMarket">
-      Finding the nearest market to your location...
-    </div>
-    <table id="marketsTable">
-      <thead>
-        <tr>
-          <th>Market Name</th>
-          <th>Location</th>
-          <th>Day</th>
-          <th>Time</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr data-lat="32.699" data-lng="-117.169" data-day="Tuesday">
-          <td>Coronado Certified Farmers Market</td>
-          <td>Coronado Ferry Landing, 1201 First St, Coronado</td>
-          <td>Tuesday</td>
-          <td>2:30 PM - 6:00 PM</td>
-        </tr>
-        <tr data-lat="32.723" data-lng="-117.167" data-day="Saturday">
-          <td>Little Italy Mercato</td>
-          <td>501 W Date St, San Diego</td>
-          <td>Saturday</td>
-          <td>8:00 AM - 2:00 PM</td>
-        </tr>
-        <tr data-lat="32.752" data-lng="-117.148" data-day="Sunday">
-          <td>Hillcrest Farmers Market</td>
-          <td>3960 Normal St, San Diego</td>
-          <td>Sunday</td>
-          <td>8:00 AM - 2:00 PM</td>
-        </tr>
-        <tr data-lat="32.747" data-lng="-117.251" data-day="Wednesday">
-          <td>Ocean Beach Farmers Market</td>
-          <td>4900 Newport Ave, San Diego</td>
-          <td>Wednesday</td>
-          <td>4:00 PM - 8:00 PM</td>
-        </tr>
-        <!-- Add more rows as needed -->
-      </tbody>
-    </table>
-    <div id="map" class="map-container"></div>
-    <div id="directionsPanel"></div>
   </div>
-  <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAZc9MzdR0uTYeXBh1OwT5Yi3Nl85bb_r0&libraries=geometry,places"></script>
+
+  <!-- NEAREST BANNER -->
+  <div class="nearest-banner" id="nearestBanner">
+    <div class="nearest-inner">
+      <span class="icon">📍</span>
+      <div id="nearestText">Finding the nearest market…</div>
+    </div>
+  </div>
+
+  <!-- MAIN -->
+  <div class="main-wrap">
+
+    <!-- STATS -->
+    <div class="stats-bar" id="statsBar">
+      <div class="stat-chip"><strong id="visibleCount">20</strong>&nbsp;markets</div>
+      <div class="stat-chip"><span class="open-dot"></span>&nbsp;<strong id="openCount">0</strong>&nbsp;open now</div>
+      <div class="stat-chip">📅 <strong id="todayLabel">—</strong></div>
+    </div>
+
+    <!-- CARDS GRID -->
+    <div class="cards-grid" id="cardsGrid">
+      <!-- Injected by JS -->
+      <div class="no-results" id="noResults">
+        <div style="font-size:2.5rem">🌾</div>
+        <p>No markets found — try a different search or day.</p>
+      </div>
+    </div>
+
+    <!-- MAP -->
+    <div class="map-section">
+      <div class="section-title">🗺️ Market Map</div>
+      <div id="map"></div>
+    </div>
+
+  </div>
+
+  <footer>
+    <p>Built with 🌿 for San Diego food lovers &nbsp;·&nbsp; Data sourced from <a href="https://www.sdfarmbureau.org" target="_blank">SD Farm Bureau</a> &amp; local market websites.</p>
+    <p style="margin-top:.4rem">Hours may vary — always check with the market directly before visiting.</p>
+  </footer>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
-    const map = new google.maps.Map(document.getElementById('map'), {
-      zoom: 12,
-      center: { lat: 32.7157, lng: -117.1611 }, // Default center: San Diego
-    });
-    const directionsService = new google.maps.DirectionsService();
-    const directionsRenderer = new google.maps.DirectionsRenderer();
-    directionsRenderer.setMap(map);
-    directionsRenderer.setPanel(document.getElementById('directionsPanel'));
+    // ── MARKET DATA ──
+    const MARKETS = [
+      { name: "Coronado Certified Farmers Market", location: "Coronado Ferry Landing, 1201 First St, Coronado", day: "Tuesday", time: "2:30 PM – 6:00 PM", start: 14.5, end: 18, lat: 32.699, lng: -117.169, emoji: "⛵" },
+      { name: "Little Italy Mercato", location: "501 W Date St, San Diego", day: "Saturday", time: "8:00 AM – 2:00 PM", start: 8, end: 14, lat: 32.723, lng: -117.172, emoji: "🍕" },
+      { name: "Hillcrest Farmers Market", location: "3960 Normal St, San Diego", day: "Sunday", time: "8:00 AM – 2:00 PM", start: 8, end: 14, lat: 32.752, lng: -117.148, emoji: "🌈" },
+      { name: "Ocean Beach Farmers Market", location: "4900 Newport Ave, San Diego", day: "Wednesday", time: "4:00 PM – 8:00 PM", start: 16, end: 20, lat: 32.747, lng: -117.251, emoji: "🌊" },
+      { name: "Pacific Beach Tuesday Market", location: "Promenade at Pacific Beach, 901 Turquoise St, San Diego", day: "Tuesday", time: "2:00 PM – 7:00 PM", start: 14, end: 19, lat: 32.795, lng: -117.252, emoji: "🏄" },
+      { name: "North Park Thursday Market", location: "2900 University Ave, San Diego", day: "Thursday", time: "3:00 PM – 7:00 PM", start: 15, end: 19, lat: 32.749, lng: -117.130, emoji: "🎨" },
+      { name: "South Park Sunday Market", location: "Grape St & 30th St, San Diego", day: "Sunday", time: "9:00 AM – 2:00 PM", start: 9, end: 14, lat: 32.726, lng: -117.129, emoji: "🌻" },
+      { name: "Encinitas Certified Farmers Market", location: "Corner of El Camino Real & Encinitas Blvd, Encinitas", day: "Saturday", time: "9:00 AM – 1:00 PM", start: 9, end: 13, lat: 33.041, lng: -117.269, emoji: "🌴" },
+      { name: "La Jolla Open Aire Market", location: "7335 Girard Ave, La Jolla", day: "Sunday", time: "9:00 AM – 1:00 PM", start: 9, end: 13, lat: 32.844, lng: -117.274, emoji: "🎭" },
+      { name: "Mira Mesa Sunday Market", location: "10510 Reagan Rd, San Diego", day: "Sunday", time: "8:00 AM – 11:00 AM", start: 8, end: 11, lat: 32.913, lng: -117.144, emoji: "🏡" },
+      { name: "Del Mar Certified Farmers Market", location: "1050 Camino Del Mar, Del Mar", day: "Saturday", time: "1:00 PM – 4:00 PM", start: 13, end: 16, lat: 32.959, lng: -117.267, emoji: "🐴" },
+      { name: "Rancho Santa Fe Farmers Market", location: "16079 San Dieguito Rd, Rancho Santa Fe", day: "Friday", time: "9:00 AM – 1:30 PM", start: 9, end: 13.5, lat: 33.004, lng: -117.209, emoji: "🌾" },
+      { name: "Chula Vista Farmers Market", location: "300 E Lake Blvd, Chula Vista", day: "Thursday", time: "4:00 PM – 8:00 PM", start: 16, end: 20, lat: 32.625, lng: -117.033, emoji: "🍊" },
+      { name: "Vista Farmers Market", location: "325 S Melrose Dr, Vista", day: "Saturday", time: "8:00 AM – Noon", start: 8, end: 12, lat: 33.198, lng: -117.234, emoji: "🧅" },
+      { name: "Escondido Certified Farmers Market", location: "262 E Grand Ave, Escondido", day: "Tuesday", time: "2:30 PM – 6:00 PM", start: 14.5, end: 18, lat: 33.123, lng: -117.082, emoji: "🏔️" },
+      { name: "Mission Valley Farmers Market", location: "1640 Camino Del Rio N, San Diego", day: "Wednesday", time: "9:00 AM – 1:00 PM", start: 9, end: 13, lat: 32.766, lng: -117.114, emoji: "🏙️" },
+      { name: "Santee Farmers Market", location: "9855 Mission Gorge Rd, Santee", day: "Tuesday", time: "3:00 PM – 7:00 PM", start: 15, end: 19, lat: 32.840, lng: -116.975, emoji: "🌄" },
+      { name: "National City Thursday Market", location: "1430 D Ave, National City", day: "Thursday", time: "1:00 PM – 5:00 PM", start: 13, end: 17, lat: 32.677, lng: -117.098, emoji: "🌮" },
+      { name: "Poway Farmers Market", location: "13325 Civic Center Dr, Poway", day: "Saturday", time: "8:00 AM – Noon", start: 8, end: 12, lat: 32.963, lng: -117.036, emoji: "🍇" },
+      { name: "Carlsbad Village Farmers Market", location: "State St & Grand Ave, Carlsbad", day: "Wednesday", time: "2:30 PM – 6:00 PM", start: 14.5, end: 18, lat: 33.158, lng: -117.348, emoji: "🌸" },
+    ];
 
-    document.getElementById('searchInput').addEventListener('input', function () {
-      const searchValue = this.value.toLowerCase();
-      const rows = document.querySelectorAll('#marketsTable tbody tr');
-      rows.forEach(row => {
-        const rowText = Array.from(row.querySelectorAll('td')).map(td => td.textContent.toLowerCase()).join(' ');
-        row.style.display = rowText.includes(searchValue) ? '' : 'none';
+    // ── HELPERS ──
+    const DAYS = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+    const now = new Date();
+    const todayName = DAYS[now.getDay()];
+    const nowHour = now.getHours() + now.getMinutes()/60;
+
+    function isOpen(market) {
+      return market.day === todayName && nowHour >= market.start && nowHour < market.end;
+    }
+
+    // ── UPDATE TODAY PILL LABEL ──
+    document.getElementById('todayPill').textContent = `Today (${todayName.slice(0,3)})`;
+    document.getElementById('todayLabel').textContent = todayName;
+
+    // ── BUILD CARDS ──
+    const grid = document.getElementById('cardsGrid');
+    const noResults = document.getElementById('noResults');
+    const cardEls = [];
+
+    MARKETS.forEach((m, i) => {
+      const open = isOpen(m);
+      const card = document.createElement('div');
+      card.className = 'market-card' + (open ? ' is-open' : '');
+      card.dataset.day = m.day;
+      card.dataset.name = m.name.toLowerCase();
+      card.dataset.location = m.location.toLowerCase();
+      card.innerHTML = `
+        <div class="card-header">
+          <span class="card-emoji">${m.emoji}</span>
+          ${open
+            ? `<span class="open-badge">● Open Now</span>`
+            : `<span class="closed-badge">${m.day}</span>`
+          }
+        </div>
+        <div class="card-name">${m.name}</div>
+        <div class="card-location">
+          <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/><circle cx="12" cy="9" r="2.5"/></svg>
+          ${m.location}
+        </div>
+        <div class="card-footer">
+          <span class="card-day">${m.day}</span>
+          <span class="card-time">
+            <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+            ${m.time}
+          </span>
+        </div>
+      `;
+      card.addEventListener('click', () => flyToMarker(i));
+      grid.insertBefore(card, noResults);
+      cardEls.push(card);
+    });
+
+    // ── COUNTS ──
+    function updateCounts() {
+      const visible = cardEls.filter(c => !c.classList.contains('hidden')).length;
+      const openNow = MARKETS.filter((m, i) => isOpen(m) && !cardEls[i].classList.contains('hidden')).length;
+      document.getElementById('visibleCount').textContent = visible;
+      document.getElementById('openCount').textContent = openNow;
+    }
+    updateCounts();
+
+    // ── FILTER LOGIC ──
+    let activeDay = 'All';
+    let searchVal = '';
+
+    function applyFilters() {
+      let anyVisible = false;
+      cardEls.forEach((card, i) => {
+        const m = MARKETS[i];
+        const dayOk = activeDay === 'All'
+          || (activeDay === 'Today' && m.day === todayName)
+          || m.day === activeDay;
+        const searchOk = !searchVal
+          || card.dataset.name.includes(searchVal)
+          || card.dataset.location.includes(searchVal)
+          || m.day.toLowerCase().includes(searchVal);
+        const show = dayOk && searchOk;
+        card.classList.toggle('hidden', !show);
+        if (show) anyVisible = true;
+      });
+      noResults.style.display = anyVisible ? 'none' : 'block';
+      updateCounts();
+    }
+
+    document.querySelectorAll('.pill').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.pill').forEach(p => p.classList.remove('active'));
+        btn.classList.add('active');
+        activeDay = btn.dataset.day;
+        applyFilters();
       });
     });
 
-    document.getElementById('dayFilter').addEventListener('change', function () {
-      const filterValue = this.value;
-      const rows = document.querySelectorAll('#marketsTable tbody tr');
-      rows.forEach(row => {
-        const rowDay = row.getAttribute('data-day');
-        row.style.display = filterValue === 'All' || rowDay === filterValue ? '' : 'none';
-      });
+    document.getElementById('searchInput').addEventListener('input', e => {
+      searchVal = e.target.value.toLowerCase().trim();
+      applyFilters();
     });
 
+    // ── LEAFLET MAP ──
+    const map = L.map('map', { zoomControl: true }).setView([32.78, -117.17], 11);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© <a href="https://openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+      maxZoom: 19,
+    }).addTo(map);
+
+    // Custom marker icon
+    function makeIcon(emoji, open) {
+      return L.divIcon({
+        className: '',
+        html: `<div style="
+          width:36px;height:36px;border-radius:50% 50% 50% 4px;
+          background:${open ? '#5aaa72' : '#c2673e'};
+          border:2px solid #fff;
+          box-shadow:0 2px 8px rgba(0,0,0,.25);
+          display:flex;align-items:center;justify-content:center;
+          font-size:16px;transform:rotate(-45deg)
+        "><span style="transform:rotate(45deg)">${emoji}</span></div>`,
+        iconSize: [36, 36],
+        iconAnchor: [18, 36],
+        popupAnchor: [0, -38],
+      });
+    }
+
+    const markers = MARKETS.map((m, i) => {
+      const open = isOpen(m);
+      const marker = L.marker([m.lat, m.lng], { icon: makeIcon(m.emoji, open) })
+        .addTo(map)
+        .bindPopup(`
+          <div class="popup-name">${m.name}</div>
+          <div class="popup-info">
+            📍 ${m.location}<br>
+            📅 ${m.day} · ${m.time}<br>
+            ${open ? '<span class="popup-open">● Open right now!</span>' : ''}
+          </div>
+        `);
+      return marker;
+    });
+
+    function flyToMarker(i) {
+      map.flyTo([MARKETS[i].lat, MARKETS[i].lng], 15, { duration: 1 });
+      markers[i].openPopup();
+      document.getElementById('map').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
+    // ── GEOLOCATION ──
+    const banner = document.getElementById('nearestBanner');
     if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const userLat = position.coords.latitude;
-          const userLng = position.coords.longitude;
-          findNearestMarket(userLat, userLng);
-        },
-        () => {
-          document.getElementById('nearestMarket').textContent = 
-            'Unable to access your location. Please enable location services.';
-        }
-      );
-    } else {
-      document.getElementById('nearestMarket').textContent = 
-        'Geolocation is not supported by your browser.';
-    }
+      banner.style.display = 'block';
+      navigator.geolocation.getCurrentPosition(pos => {
+        const userLat = pos.coords.latitude;
+        const userLng = pos.coords.longitude;
 
-    function findNearestMarket(userLat, userLng) {
-      const rows = document.querySelectorAll('#marketsTable tbody tr');
-      let nearestMarket = null;
-      let shortestDistance = Infinity;
+        // Add user marker
+        L.marker([userLat, userLng], {
+          icon: L.divIcon({
+            className: '',
+            html: `<div style="width:14px;height:14px;border-radius:50%;background:#4a90e2;border:3px solid #fff;box-shadow:0 0 0 4px rgba(74,144,226,.3)"></div>`,
+            iconSize: [14,14], iconAnchor: [7,7]
+          })
+        }).addTo(map).bindPopup('You are here 📍').openPopup();
 
-      rows.forEach(row => {
-        const marketLat = parseFloat(row.getAttribute('data-lat'));
-        const marketLng = parseFloat(row.getAttribute('data-lng'));
-        const distance = google.maps.geometry.spherical.computeDistanceBetween(
-          new google.maps.LatLng(userLat, userLng),
-          new google.maps.LatLng(marketLat, marketLng)
-        );
+        // Find nearest
+        let minDist = Infinity, nearest = null, nearestIdx = 0;
+        MARKETS.forEach((m, i) => {
+          const d = Math.hypot(m.lat - userLat, m.lng - userLng);
+          if (d < minDist) { minDist = d; nearest = m; nearestIdx = i; }
+        });
 
-        if (distance < shortestDistance) {
-          shortestDistance = distance;
-          nearestMarket = row;
-        }
-      });
-
-      if (nearestMarket) {
-        const marketName = nearestMarket.querySelector('td:first-child').textContent;
-        const marketLocation = nearestMarket.querySelector('td:nth-child(2)').textContent;
-
-        document.getElementById('nearestMarket').innerHTML = 
-          `Nearest Market: <strong>${marketName}</strong> at ${marketLocation}`;
-        document.getElementById('nearestMarket').style.display = 'block';
-
-        const marketLat = parseFloat(nearestMarket.getAttribute('data-lat'));
-        const marketLng = parseFloat(nearestMarket.getAttribute('data-lng'));
-
-        calculateAndDisplayRoute(userLat, userLng, marketLat, marketLng);
-      }
-    }
-
-    function calculateAndDisplayRoute(userLat, userLng, marketLat, marketLng) {
-      const request = {
-        origin: { lat: userLat, lng: userLng },
-        destination: { lat: marketLat, lng: marketLng },
-        travelMode: 'DRIVING',
-      };
-      directionsService.route(request, (result, status) => {
-        if (status === 'OK') {
-          directionsRenderer.setDirections(result);
-        } else {
-          document.getElementById('directionsPanel').textContent = 
-            'Unable to calculate directions. Please try again.';
-        }
+        document.getElementById('nearestText').innerHTML =
+          `Nearest market to you: <strong>${nearest.name}</strong> — ${nearest.day}, ${nearest.time}`;
+        banner.querySelector('.nearest-inner').style.cursor = 'pointer';
+        banner.querySelector('.nearest-inner').addEventListener('click', () => flyToMarker(nearestIdx));
+      }, () => {
+        banner.style.display = 'none';
       });
     }
   </script>
